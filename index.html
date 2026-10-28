@@ -330,6 +330,13 @@
                 <input type="password" class="form-control" id="setNewPassword">
               </div>
               <div class="col-md-6">
+                <label class="form-label">การยืนยันตัวตนตอนลงเวลา</label>
+                <select class="form-select" id="setRequirePin">
+                  <option value="0">ไม่ต้องใส่ PIN (ถ่ายรูป Selfie อย่างเดียว)</option>
+                  <option value="1">ต้องใส่ PIN + ถ่ายรูป Selfie</option>
+                </select>
+              </div>
+              <div class="col-md-6">
                 <label class="form-label d-block">สี Theme ระบบ</label>
                 <div class="d-flex gap-2" id="themeSwatches">
                   <div class="theme-swatch" style="background:#0d6efd" data-color="#0d6efd"></div>
@@ -390,6 +397,11 @@
           <i class="fa-solid fa-triangle-exclamation me-1"></i>
           ไม่สามารถเปิดกล้องได้ กรุณาอนุญาตการใช้งานกล้องของเบราว์เซอร์ แล้วลองใหม่อีกครั้ง<br>
           <small>(ระบบไม่รองรับการอัปโหลดรูปภาพ ต้องถ่ายจากกล้องแบบสดเท่านั้น)</small>
+        </div>
+
+        <!-- ช่อง PIN แสดงเฉพาะเมื่อ Admin เปิดตัวเลือก "ต้องใส่ PIN" ในหน้าตั้งค่า -->
+        <div id="pinInputWrap" style="display:none;">
+          <input type="password" inputmode="numeric" class="form-control form-control-lg text-center" id="pinInput" placeholder="รหัส PIN" maxlength="6">
         </div>
       </div>
       <div class="modal-footer">
@@ -742,7 +754,12 @@ function bindCheckinEvents(){
 
 function openPinModal(type){
   STATE.pinAction = type;
-  document.getElementById('pinModalDesc').textContent = 'กรุณามองกล้องและกดยืนยันเพื่อลง "' + type + '"';
+  const needPin = !!(STATE.settings && STATE.settings.requirePin);
+  document.getElementById('pinModalDesc').textContent = needPin
+    ? 'กรุณามองกล้องและกรอกรหัส PIN เพื่อยืนยันการลง "' + type + '"'
+    : 'กรุณามองกล้องและกดยืนยันเพื่อลง "' + type + '"';
+  document.getElementById('pinInput').value = '';
+  document.getElementById('pinInputWrap').style.display = needPin ? 'block' : 'none';
   new bootstrap.Modal(document.getElementById('pinModal')).show();
   startCamera();
 }
@@ -785,6 +802,9 @@ function submitCheckInOut(){
   const staffId = document.getElementById('staffSelect').value;
   if(!staffId){ Swal.fire('กรุณาเลือกชื่อ-นามสกุล', '', 'warning'); return; }
   if(!STATE.currentPos){ Swal.fire('ยังไม่พบตำแหน่ง GPS', '', 'warning'); return; }
+  const needPin = !!(STATE.settings && STATE.settings.requirePin);
+  const pin = document.getElementById('pinInput').value.trim();
+  if(needPin && !pin){ Swal.fire('กรุณากรอกรหัส PIN', '', 'warning'); return; }
 
   const video = document.getElementById('cameraPreview');
   const canvas = document.getElementById('cameraCanvas');
@@ -816,6 +836,7 @@ function submitCheckInOut(){
 
   apiCall('checkInOut', {
     staffId: staffId,
+    pin: needPin ? pin : '',
     type: STATE.pinAction,
     lat: STATE.currentPos.lat,
     lng: STATE.currentPos.lng,
@@ -953,6 +974,7 @@ function loadAdminGeneralForm(){
   document.getElementById('setLat').value = s.schoolLat || '';
   document.getElementById('setLng').value = s.schoolLng || '';
   document.getElementById('setRadius').value = s.radius || 150;
+  document.getElementById('setRequirePin').value = s.requirePin ? '1' : '0';
   document.querySelectorAll('.theme-swatch').forEach(function(sw){
     sw.classList.toggle('selected', sw.getAttribute('data-color') === s.themeColor);
   });
@@ -967,6 +989,7 @@ function saveGeneralSettingsUI(){
     schoolLng: document.getElementById('setLng').value,
     radius: document.getElementById('setRadius').value,
     themeColor: selectedSwatch ? selectedSwatch.getAttribute('data-color') : STATE.settings.themeColor,
+    requirePin: document.getElementById('setRequirePin').value === '1',
     newPassword: document.getElementById('setNewPassword').value,
     password: STATE.adminPassword
   };
